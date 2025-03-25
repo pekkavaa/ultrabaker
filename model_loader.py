@@ -168,7 +168,7 @@ def add_vertex_colors(gltf, colors, filename):
     view_idx = len(gltf.bufferViews)-1
     # Add an accessor
     gltf.accessors.append(pygltflib.Accessor(
-        bufferView=view_idx, byteOffset=0, componentType=pygltflib.UNSIGNED_BYTE, normalized=True, count=colors_rgbx.shape[0], type='VEC3'))
+        bufferView=view_idx, byteOffset=0, componentType=pygltflib.UNSIGNED_BYTE, normalized=True, count=colors_rgbx.shape[0], type='VEC4'))
     accessor_idx = len(gltf.accessors)-1
     # Point to accessor index in mesh primitive attributes
     gltf.meshes[0].primitives[0].attributes.COLOR_0 = accessor_idx
