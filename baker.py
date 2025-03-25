@@ -62,9 +62,9 @@ def rasterize(img_shape, v0, v1, v2):
     shape = maxs[[1,0]] - mins[[1,0]] 
 
     # Bias vertices to top-left corner of the bounding box
-    v0 -= mins
-    v1 -= mins
-    v2 -= mins
+    v0 = v0 - mins
+    v1 = v1 - mins
+    v2 = v2 - mins
 
     # Store local coordinates of each pixel
     # The array 'p' contains each pixel coordinate as float (x,y).
@@ -100,11 +100,15 @@ def rasterize(img_shape, v0, v1, v2):
     return full_mask, full_barycentrics
 
 
-def draw_triangles(vert_coords, vert_values, tris, img):
-    for tri in tris:
+def draw_triangles(vert_coords, vert_values, tris, backfacing, img):
+    for tri_idx, tri in enumerate(tris):
         v0, v1, v2 = np.take(vert_coords, tri, axis=0)
         f0, f1, f2 = np.take(vert_values, tri, axis=0)
-        mask, weights = rasterize(img.shape, v0, v1, v2)
+        # print("tri_idx", tri_idx, "tri", tri, "v0", v0, "v1", v1)
+        if backfacing[tri_idx]:
+            mask, weights = rasterize(img.shape, v0, v1, v2)
+        else:
+            mask, weights = rasterize(img.shape, v0, v2, v1)
         result = weights[mask,0:1] * f0 + weights[mask,1:2] * f1 + weights[mask,2:3] * f2
         img[mask] = result
 
@@ -239,11 +243,21 @@ if validate_neighbors:
 
 
 tri_areas = []
+backfacing: list[bool] = []
+num_negative_area = 0
 
 for tri in tris:
     v0, v1, v2 = np.take(uvs, tri, axis=0)
-    tri_areas.append(cross2d(v2 - v0, v1 - v0) / 2)
+    area = cross2d(v1 - v0, v2 - v0) / 2
+    backfacing.append(area < 0)
+    if area < 0:
+        num_negative_area += 1
+        area = -area
+    tri_areas.append(area)
 
+ratio_negative = num_negative_area / len(tris)
+if ratio_negative > 0.1:
+    print(f"Warning: {ratio_negative*100:.1f} % of triangles have a negative UV surface area!")
 
 A = np.zeros((N,N))
 
@@ -308,7 +322,10 @@ for i in tqdm(range(N)):
         total_neighbor_area += tri_areas[tri_idx]
 
         local_idx = tri.index(i)
-        mask, weights = rasterize(hat_i.shape, v0, v1, v2)
+        if backfacing[tri_idx]:
+            mask, weights = rasterize(hat_i.shape, v0, v1, v2)
+        else:
+            mask, weights = rasterize(hat_i.shape, v0, v2, v1)
         hat_i[mask] = weights[..., local_idx][mask]
         mask_i[mask] = True
     
@@ -364,7 +381,7 @@ if args.show:
     print("Rasterizing the result for preview")
 
     img_result = np.zeros_like(img)
-    draw_triangles(uvs, x, tris, img_result)
+    draw_triangles(uvs, x, tris, backfacing, img_result)
 
     plot_shape = (1,2)
     figsize=(12,6)
