@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 from pathlib import Path
+import pygltflib
 from pygltflib import GLTF2
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -191,9 +192,8 @@ else:
     filename = args.input
     print(f"Loading {filename}")
     gltf = GLTF2().load(filename)
-    positions, uvs, tris, img = model_loader.extract_pos_uvs_tris_img(gltf, filename)
+    positions, normals, uvs, raw_tris, img = model_loader.extract_pos_uvs_tris_img(gltf, filename)
 
-N = len(uvs)
 
 # img2 = np.zeros_like(img)
 # xtest = np.random.uniform(0, 1, size=(N,3))
@@ -205,11 +205,99 @@ N = len(uvs)
 # ax.flatten()[1].imshow(img2)
 # plt.show()
 
+# Input may have disjoint UV coordinates in the light map but we'll merge those vertices
+# if they have the same position and normal.
+# Therefore two triangles are considered to share an edge if the edge has the same
+# position and normal.
+
+# Transform original triangles to a {old-edge -> new-edge} mapping.
+
+backfacing_raw: list[bool] = []
+
+for tri in raw_tris:
+    v0, v1, v2 = np.take(uvs, tri, axis=0)
+    area = cross2d(v1 - v0, v2 - v0) / 2
+    backfacing_raw.append(area < 0)
+
+deduplicate = True
+
+if deduplicate:
+    pos_to_id: dict[tuple, int] = dict()
+    new_tris = []
+    new_vertex_id_to_old = dict()
+    old_vertex_id_to_new = dict()
+
+    # for i in range(positions.shape[0]):
+    #     p = positions[i]
+    #     for j in range(i+1, positions.shape[0]):
+    #         k = positions[j]
+    #         print(i,j,"match")
+    #         # assert(not np.all(p == k))
+
+    def get_location_key(p, n):
+        x,y,z = p
+        nx, ny, nz = n
+        return (float(x), float(y), float(z), float(nx), float(ny), float(nz))
+
+
+    for tri_idx, (a, b, c) in enumerate(raw_tris):
+        new_tri = []
+        for i0 in [a,b,c]:
+            key = get_location_key(positions[i0], normals[i0])
+            
+            if key in pos_to_id:
+                i1 = pos_to_id[key]
+            else:
+                pos_to_id[key] = i0
+                i1 = i0
+            
+            new_vertex_id_to_old[i1] = i0
+            old_vertex_id_to_new[i0] = i1
+            new_tri.append(i1)
+        
+        new_tris.append(tuple(new_tri))
+            
+
+    print("pos_to_id:")
+    for key, value in pos_to_id.items():
+        print(key, value)
+
+    for tri in new_tris:
+        for i0 in tri:
+            assert(i0 in new_vertex_id_to_old)
+
+    for tri_idx, ((a, b, c), (a2, b2, c2)) in enumerate(zip(raw_tris, new_tris)):
+        print(f"[{tri_idx}] ({a}, {b}, {c}) -> ({a2}, {b2}, {c2})")
+
+    print("new_tris:")
+    # print(new_tris)
+    print(f"new_tris length: {len(new_tris)} vs {len(raw_tris)} of old")
+    print()
+
+
+    tris = new_tris
+else:
+    tris = raw_tris
+
+N = len(uvs)
+
+
+
+# Go over each original edge and check if it's already traversed on the other side.
+# If it is, emit the saved indices to the edge array.
+# If not, add it both ways with new vertex indices.
+
+# Recreate the triangles array with new edges.
+# The triangles array is now a series of compressed vertex indices.
+# Fit colors.
+# Finally, use the old-edge -> new-edge mapping to create a longer, duplicated color result.
+
 print('Finding vertex neighbors')
 
 edge_tris = {}
 vertex_tris = [[] for i in range(N)]
 vertex_neighbors = [set() for i in range(N)]
+
 
 for tri_idx, (a, b, c) in enumerate(tris):
     # If two triangles with the same winding share an edge, then the other
@@ -340,6 +428,8 @@ for i in tqdm(range(N)):
         b[i] = (total_neighbor_area / num_samples) * np.sum(hat_i[...,None] * img, axis=(0,1))
 
     if False:
+        print('num_samples:', num_samples)
+        print('total_neighbor_area:', total_neighbor_area)
         fig,ax=plt.subplots(3, figsize=(6,12))
         ax[0].imshow(hat_i)
         ax[1].imshow(mask_i)
@@ -369,19 +459,27 @@ print(f"Solver took: {time.time() - solver_start:.3} s")
 # Problem: Conjugate Gradient solver doesn't respect bounds so we have to clip the result.
 x = np.clip(x, 0, 1)
 
-print(f"Saving GLB model")
+if deduplicate:
+    x_copy = x.copy()
+    for old in range(x.shape[0]):
+        new = old_vertex_id_to_new[old]
+        x[old] = x_copy[new]
+
+print(f"Saving GLB model {filename}")
 
 color_rgb = (x*255).astype(np.uint8)
 gltf = model_loader.add_vertex_colors(gltf, color_rgb, filename)
+gltf.convert_buffers(pygltflib.BufferFormat.BINARYBLOB)
 gltf.save_binary(args.output)
-model_loader.save_big_endian_dump(str(Path(args.output).with_suffix('.binm')), positions, tris, color_rgb)
+gltf.save("baked_plaintext.gltf")
+model_loader.save_big_endian_dump(str(Path(args.output).with_suffix('.binm')), positions, raw_tris, color_rgb)
 print("Saving done")
 
 if args.show:
     print("Rasterizing the result for preview")
 
     img_result = np.zeros_like(img)
-    draw_triangles(uvs, x, tris, backfacing, img_result)
+    draw_triangles(uvs, x, raw_tris, backfacing_raw, img_result)
 
     plot_shape = (1,2)
     figsize=(12,6)

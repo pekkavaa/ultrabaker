@@ -101,6 +101,7 @@ def extract_pos_uvs_tris_img(gltf, filename):
     inds = load_indices(gltf, mesh)
     uvs = load_attribute(gltf, mesh, 'TEXCOORD_0')
     positions = load_attribute(gltf, mesh, 'POSITION')
+    normals = load_attribute(gltf, mesh, 'NORMAL')
 
     img_path = urllib.parse.unquote(gltf.images[0].uri)
     img_rel_path = Path(filename).with_name(img_path)
@@ -126,7 +127,7 @@ def extract_pos_uvs_tris_img(gltf, filename):
     uvs[:,0] *= img.shape[1]
     uvs[:,1] *= img.shape[0]
 
-    return positions, uvs, tris, img
+    return positions, normals, uvs, tris, img
 
 base64_start = "data:application/octet-stream;base64,"
 
