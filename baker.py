@@ -339,11 +339,18 @@ if cache_path and os.path.exists(cache_path):
     print("Loading ", cache_path)
     b = np.load(cache_path)
 else:
+    inds = set()
+    for a,b,c in new_tris:
+        inds.add(a)
+        inds.add(b)
+        inds.add(c)
+    inds = sorted(list(inds))
 
     print('Building the target vector b')
     b = np.zeros((N,3))
 
-    for i in tqdm(range(N)):
+    # for i in tqdm(range(N)):
+    for i in tqdm(inds):
         # Find triangles that neighbor this triangle.
         neighs = vertex_tris[i]
 
