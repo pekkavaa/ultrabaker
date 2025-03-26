@@ -219,6 +219,8 @@ vertex_neighbors = [set() for i in range(N)]
 
 # Maps a position-normal key to a set of oriented edges, vertex index pairs that is
 edge_twins: dict[tuple, set[tuple]] = {}
+# Vertices that overlap
+vertex_twins: dict[tuple, set[tuple]] = {}
 
 def get_edge_key(i,j):
     key_i = get_location_key(positions[i], normals[i])
@@ -226,7 +228,11 @@ def get_edge_key(i,j):
     return (key_i, key_j)
 
 for tri_idx, (a, b, c) in enumerate(tris):
+    for i in [a,b,c]:
+        vertex_twins.setdefault(get_location_key(positions[i], normals[i]), set()).add(i)
+
     for i, j in [(a,b), (b,c), (c,a)]:
+
         key_ij = get_edge_key(i,j)
         if key_ij not in edge_twins:
             edge_twins[key_ij] = set()
@@ -247,14 +253,29 @@ for twins in edge_twins.values():
             assert np.all(normals[i] == normals[k])
             assert np.all(normals[j] == normals[l])
 
+for vtwins in vertex_twins.values():
+    i, *rest = list(twins)
+    if rest:
+        for j in rest:
+            assert np.all(positions[i] == positions[j])
+            assert np.all(normals[i] == normals[j])
+
 
 for tri_idx, (a, b, c) in enumerate(tris):
+    for i in [a,b,c]:
+        twins = vertex_twins[get_location_key(positions[i], normals[i])]
+        for ti in twins:
+            vertex_tris[ti].append(tri_idx)
+
     # The 'edge_tris' array should contain *all* triangles incident to an edge used as a key
     # The 'vertex_neighbors' array has all vertex neighbor indices.
     # The 'vertex_tris' array has all the triangles the vertex is part of.
     for i, j in [(a,b), (b,c), (c,a)]:
         twins = edge_twins[get_edge_key(i,j)]
         assert (i,j) in twins
+
+        vertex_neighbors[i].add(j)
+        vertex_neighbors[j].add(i)
 
         for ti, tj in twins:
             edge_tris.setdefault((ti,tj), []).append(tri_idx)
@@ -263,7 +284,8 @@ for tri_idx, (a, b, c) in enumerate(tris):
             vertex_neighbors[i].add(tj)
             vertex_neighbors[j].add(ti)
         
-            vertex_tris[ti].append(tri_idx)
+            # vertex_tris[ti].append(tri_idx)
+            # vertex_tris[tj].append(tri_idx)
 
 
 # I belive the above loop doesn't guarantee uniqueness of per-edge and per-vertex
@@ -283,7 +305,6 @@ for tri_idx, (a,b,c) in enumerate(tris):
         neigh_tris = edge_tris[(i,j)]
         assert tri_idx in neigh_tris
     
-
 tri_areas = []
 backfacing: list[bool] = []
 num_negative_area = 0
@@ -370,7 +391,7 @@ else:
     # for i in tqdm(range(N)):
     for i in tqdm(inds):
         # Find triangles that neighbor this triangle.
-        neighs = vertex_tris[i]
+        neigh_tris = vertex_tris[i]
 
         # Sample a linear "hat" function in the pixel grid that is 1 directly on the
         # the vertex number 'i', and decreases linearly to 0 towards the "triangle fan"
@@ -380,7 +401,7 @@ else:
 
         total_neighbor_area = 0.0 # Called "µ_i" in the paper.
 
-        for tri_idx in neighs:
+        for tri_idx in neigh_tris:
             tri = tris[tri_idx]
             v0, v1, v2 = np.take(uvs, tri, axis=0)
             total_neighbor_area += tri_areas[tri_idx]
@@ -413,15 +434,24 @@ else:
 
         # Very small triangles may not rasterize even a single pixel.
         if num_samples > 0:
-            b[i] = (total_neighbor_area / num_samples) * np.sum(hat_i[...,None] * img, axis=(0,1))
+            sample_grid = hat_i[...,None] * img
+            b[i] = (total_neighbor_area / num_samples) * np.sum(sample_grid, axis=(0,1))
 
-        if False:
+        if num_samples > 0 and False:
             print('num_samples:', num_samples)
             print('total_neighbor_area:', total_neighbor_area)
-            fig,ax=plt.subplots(3, figsize=(6,12))
+            print("neigh_tris:", neigh_tris)
+            fig,axes=plt.subplots(2,2, figsize=(12,12))
+            ax=axes.flatten()
+            fig.suptitle(f"{i=} with {len(neigh_tris)} triangle neighbors")
             ax[0].imshow(hat_i)
+            ax[0].set_title("hat_i")
             ax[1].imshow(mask_i)
-            ax[2].imshow(hat_i[...,None] * img)
+            ax[1].set_title("mask_i")
+            ax[2].imshow(sample_grid)
+            ax[2].set_title("sample_grid")
+            
+
             plt.tight_layout()
             plt.show()
 
