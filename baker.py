@@ -113,11 +113,29 @@ def draw_triangles(vert_coords, vert_values, tris, backfacing, img):
         result = weights[mask,0:1] * f0 + weights[mask,1:2] * f1 + weights[mask,2:3] * f2
         img[mask] = result
 
+# sRGB conversion functions by https://github.com/PetterS/opencv_srgb_gamma/blob/master/srgb.py
+
+def to_linear(srgb):
+	linear = np.float32(srgb)
+	less = linear <= 0.04045
+	linear[less] = linear[less] / 12.92
+	linear[~less] = np.power((linear[~less] + 0.055) / 1.055, 2.4)
+	return linear
+
+    
+def from_linear(linear):
+	srgb = linear.copy()
+	less = linear <= 0.0031308
+	srgb[less] = linear[less] * 12.92
+	srgb[~less] = 1.055 * np.power(linear[~less], 1.0 / 2.4) - 0.055
+	return srgb
 
 filename = args.input
 print(f"Loading {filename}")
 gltf = GLTF2().load(filename)
 raw_positions, raw_normals, raw_uvs, raw_tris, img = model_loader.extract_pos_uvs_tris_img(gltf, filename)
+
+img[...,:3] = to_linear(img[...,:3])
 
 
 # img2 = np.zeros_like(img)
@@ -430,6 +448,8 @@ print(f"Solver took: {time.time() - solver_start:.3} s")
 
 # Problem: Conjugate Gradient solver doesn't respect bounds so we have to clip the result.
 x = np.clip(x, 0, 1)
+
+x = from_linear(x)
 
 if deduplicate:
     x_copy = x.copy()
