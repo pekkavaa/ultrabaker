@@ -184,38 +184,14 @@ if deduplicate:
         new_tris.append(tuple(new_tri))
             
 
-    print("pos_to_id:")
-    for key, value in pos_to_id.items():
-        print(key, value)
-
     for tri in new_tris:
         for i0 in tri:
             assert i0 in new_vertex_id_to_old
 
-    for tri_idx, ((a, b, c), (a2, b2, c2)) in enumerate(zip(raw_tris, new_tris)):
-        print(f"[{tri_idx}] ({a}, {b}, {c}) -> ({a2}, {b2}, {c2})")
-
-    print("new_tris:")
-    # print(new_tris)
-    print(f"new_tris length: {len(new_tris)} vs {len(raw_tris)} of old")
-    print()
-
-
-    # tris = new_tris
     tris = raw_tris
     positions = raw_positions
     normals = raw_normals
     uvs = raw_uvs
-
-    # positions = np.take(raw_positions, vert_ids, axis=0)
-    # normals = np.take(raw_normals, vert_ids, axis=0)
-    # uvs = np.take(raw_uvs, vert_ids, axis=0)
-
-    # for new, old in enumerate(vert_ids):
-    #     assert(np.all(positions[new] == raw_positions[old]))
-    #     assert(np.all(normals[new] == raw_normals[old]))
-    #     assert(np.all(uvs[new] == raw_uvs[old]))
-    # print()
 else:
     tris = raw_tris
     positions = raw_positions
@@ -224,16 +200,6 @@ else:
 
 N = len(uvs)
 
-
-
-# Go over each original edge and check if it's already traversed on the other side.
-# If it is, emit the saved indices to the edge array.
-# If not, add it both ways with new vertex indices.
-
-# Recreate the triangles array with new edges.
-# The triangles array is now a series of compressed vertex indices.
-# Fit colors.
-# Finally, use the old-edge -> new-edge mapping to create a longer, duplicated color result.
 
 print('Finding vertex neighbors')
 
@@ -251,19 +217,15 @@ def get_edge_key(i,j):
 
 for tri_idx, (a, b, c) in enumerate(tris):
     for i, j in [(a,b), (b,c), (c,a)]:
-        # key_i = get_location_key(raw_positions[i], raw_normals[i])
-        # key_j = get_location_key(raw_positions[j], raw_normals[j])
-        key_ij = get_edge_key(i,j) # (key_i, key_j)
+        key_ij = get_edge_key(i,j)
         if key_ij not in edge_twins:
             edge_twins[key_ij] = set()
         edge_twins[key_ij].add((i,j))
 
-        key_ji = get_edge_key(j,i) # (key_j, key_i)
+        key_ji = get_edge_key(j,i)
         if key_ji not in edge_twins:
             edge_twins[key_ji] = set()
         edge_twins[key_ji].add((j,i))
-
-# print("Edge twins:", edge_twins)
 
 for twins in edge_twins.values():
     head, *rest = list(twins)
@@ -278,10 +240,9 @@ for twins in edge_twins.values():
 
 
 for tri_idx, (a, b, c) in enumerate(tris):
-    # If two triangles with the same winding share an edge, then the other
-    # side will have it as (i, j) and the other as (j, i). The 'edge_tris' array
-    # should contain *all* triangles incident to an edge used as a key, so we
-    # add the triangle to both ways below.
+    # The 'edge_tris' array should contain *all* triangles incident to an edge used as a key
+    # The 'vertex_neighbors' array has all vertex neighbor indices.
+    # The 'vertex_tris' array has all the triangles the vertex is part of.
     for i, j in [(a,b), (b,c), (c,a)]:
         twins = edge_twins[get_edge_key(i,j)]
         assert (i,j) in twins
@@ -295,12 +256,6 @@ for tri_idx, (a, b, c) in enumerate(tris):
         
             vertex_tris[ti].append(tri_idx)
 
-    # vertex_tris[a].append(tri_idx)
-    # vertex_tris[b].append(tri_idx)
-    # vertex_tris[c].append(tri_idx)
-    # TODO also add structural neighbors
-
-    # PROBLEM: due to sparse triangle map vertex_tris will have empty elements
 
 # I belive the above loop doesn't guarantee uniqueness of per-edge and per-vertex
 # triangle lists so they are cleaned up here.
@@ -319,55 +274,6 @@ for tri_idx, (a,b,c) in enumerate(tris):
         neigh_tris = edge_tris[(i,j)]
         assert tri_idx in neigh_tris
     
-
-# print("edge tris")
-# print(edge_tris)
-# print("vertex neighbors")
-# print(vertex_neighbors)
-# print("vertex tris")
-# print(vertex_tris)
-# print()
-"""
-for tri_idx, (a, b, c) in enumerate(tris):
-    # If two triangles with the same winding share an edge, then the other
-    # side will have it as (i, j) and the other as (j, i). The 'edge_tris' array
-    # should contain *all* triangles incident to an edge used as a key, so we
-    # add the triangle to both ways below.
-    for i, j in [(a,b), (b,c), (c,a)]:
-        edge_tris.setdefault((i,j), []).append(tri_idx)
-        edge_tris.setdefault((j,i), []).append(tri_idx)
-        vertex_neighbors[i].add(j)
-        vertex_neighbors[j].add(i)
-        # TODO also add structural neighbors
-
-    vertex_tris[a].append(tri_idx)
-    vertex_tris[b].append(tri_idx)
-    vertex_tris[c].append(tri_idx)
-    # TODO also add structural neighbors
-
-    # PROBLEM: due to sparse triangle map vertex_tris will have empty elements
-"""
-
-validate_neighbors = False # doesn't apply after dedup
-
-if validate_neighbors:
-    for i, neighs in enumerate(vertex_neighbors):
-        my_tri_indices = vertex_tris[i]
-        for j in neighs:
-            same_tri = -1
-            for tri_idx in my_tri_indices:
-                tri = tris[tri_idx]
-                if i in tri and j in tri:
-                    same_tri = tri_idx
-                    break
-            assert same_tri > -1, "Bug: Each neighbor in 'vertex_neighbors' must belong to some same triangle"
-        
-
-# print("Vertex tris:")
-# print(vertex_tris)
-# print("Edge tris:")
-# print(edge_tris)
-
 
 tri_areas = []
 backfacing: list[bool] = []
@@ -528,14 +434,6 @@ print(f"Solver took: {time.time() - solver_start:.3} s")
 x = np.clip(x, 0, 1)
 
 if deduplicate:
-    #     assert(np.all(positions[new] == raw_positions[old]))
-    #     assert(np.all(normals[new] == raw_normals[old]))
-    #     assert(np.all(uvs[new] == raw_uvs[old]))
-    # print()
-
-    # x_expanded = np.zeros((len(raw_uvs), 3), dtype=x.dtype)
-    # for new, old in enumerate(vert_ids):
-    #     x_expanded[old] = x[new]
     x_copy = x.copy()
     for old, new in old_vertex_id_to_new.items():
         x[old] = x_copy[new]
@@ -546,8 +444,7 @@ color_rgb = (x*255).astype(np.uint8)
 gltf = model_loader.add_vertex_colors(gltf, color_rgb, filename)
 gltf.save_binary(args.output)
 gltf.save("baked_plaintext.gltf")
-# FIXME expand
-# model_loader.save_big_endian_dump(str(Path(args.output).with_suffix('.binm')), positions, tris, color_rgb)
+model_loader.save_big_endian_dump(str(Path(args.output).with_suffix('.binm')), positions, raw_tris, color_rgb)
 print("Saving done")
 
 if args.show:
