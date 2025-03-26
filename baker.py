@@ -152,14 +152,6 @@ if deduplicate:
     new_vertex_id_to_old = dict()
     old_vertex_id_to_new = dict()
 
-    # for i in range(positions.shape[0]):
-    #     p = positions[i]
-    #     for j in range(i+1, positions.shape[0]):
-    #         k = positions[j]
-    #         print(i,j,"match")
-    #         # assert(not np.all(p == k))
-
-
     def get_location_key(p, n):
         x,y,z = p
         nx, ny, nz = n
@@ -232,7 +224,6 @@ for twins in edge_twins.values():
     i,j = head
     if rest:
         for (k,l) in rest:
-            print(i,j,"vs",k,l)
             assert np.all(positions[i] == positions[k])
             assert np.all(positions[j] == positions[l])
             assert np.all(normals[i] == normals[k])
