@@ -130,13 +130,15 @@ def from_linear(linear):
 	srgb[~less] = 1.055 * np.power(linear[~less], 1.0 / 2.4) - 0.055
 	return srgb
 
+from ycocg import RGB_to_YCoCg, YCoCg_to_RGB
+
 filename = args.input
 print(f"Loading {filename}")
 gltf = GLTF2().load(filename)
 raw_positions, raw_normals, raw_uvs, raw_tris, img = model_loader.extract_pos_uvs_tris_img(gltf, filename)
 
 img[...,:3] = to_linear(img[...,:3])
-
+# img[...,:3] = RGB_to_YCoCg(img[...,:3])
 
 # img2 = np.zeros_like(img)
 # xtest = np.random.uniform(0, 1, size=(N,3))
@@ -476,10 +478,15 @@ for channel in tqdm(range(3)):
     print(f"Number of vertices out of bounds: {num_out_bounds} = {(num_out_bounds/N)*100:.2f} %")
 print(f"Solver took: {time.time() - solver_start:.3} s")
 
-# Problem: Conjugate Gradient solver doesn't respect bounds so we have to clip the result.
-x = np.clip(x, 0, 1)
 
-x = from_linear(x)
+# YCoCg results were identical to RGB so it's disabled.
+# x = YCoCg_to_RGB(x)
+# Conjugate Gradient solver doesn't respect bounds so we have to clip the result.
+x = np.clip(x, 0, 1)
+# The GLTF format expects vertex colors to be in linear space.
+# Therefore we don't do gamma-to-linear conversion here.
+# x = from_linear(x)
+
 
 if deduplicate:
     x_copy = x.copy()
