@@ -137,7 +137,8 @@ print(f"Loading {filename}")
 gltf = GLTF2().load(filename)
 raw_positions, raw_normals, raw_uvs, raw_tris, img = model_loader.extract_pos_uvs_tris_img(gltf, filename)
 
-img[...,:3] = to_linear(img[...,:3])
+# HACK: do processing in sRGB space
+# img[...,:3] = to_linear(img[...,:3])
 # img[...,:3] = RGB_to_YCoCg(img[...,:3])
 
 # img2 = np.zeros_like(img)
@@ -486,6 +487,9 @@ x = np.clip(x, 0, 1)
 # The GLTF format expects vertex colors to be in linear space.
 # Therefore we don't do gamma-to-linear conversion here.
 # x = from_linear(x)
+
+# HACK: sRGB processing
+x = to_linear(x)
 
 
 if deduplicate:
