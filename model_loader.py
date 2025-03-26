@@ -150,18 +150,36 @@ def add_vertex_colors(gltf, colors, filename):
     # del gltf.images[lightmap_image_index]
     # del gltf.textures[lightmap_texture_index]
     gltf.materials[lightmap_material_index].pbrMetallicRoughness.baseColorTexture = None
+    gltf.materials[lightmap_material_index].emissiveTexture = None
+    gltf.images.pop()
+    gltf.samplers.pop()
+    gltf.textures.pop()
+    mat = gltf.materials[lightmap_material_index]
 
     colors_rgbx = np.zeros((colors.shape[0], 4), dtype=colors.dtype)
     colors_rgbx[:,0:3] = colors
     colors_bytes = colors_rgbx.tobytes()
 
-    data = load_uri_as_bytes(gltf.buffers[0].uri, filename)
-    assert len(data)%4==0, "existing data should be 4 byte aligned already"
+    # NOTE: pygltf doesn't support multiple buffers with a binary blob
+
+    # data = load_uri_as_bytes(gltf.buffers[0].uri, filename)
     # data += b'\00' * (len(data)%4) # Pad data if it isn't aligned yet
 
+    # color_offset = len(data)
+    # data = colors_bytes
+    # gltf.buffers[0].uri = base64_start + base64.encodebytes(data).decode('utf-8')
+
+    data = gltf.get_data_from_buffer_uri(gltf.buffers[0].uri)
     color_offset = len(data)
-    data += colors_bytes
-    gltf.buffers[0].uri = base64_start + base64.encodebytes(data).decode('utf-8')
+    assert color_offset%4==0, "existing data should be 4 byte aligned already"
+
+    gltf.destroy_binary_blob()
+
+    data = data + colors_bytes
+
+    gltf.set_binary_blob(data)
+    gltf.buffers[0].uri = None 
+    gltf.buffers[0].byteLength = len(data) 
 
     buf_idx = 0
     # Add a bufferview with a stride=4 so that accesses are 4-byte aligned. Required by the GLTF spec.
@@ -169,10 +187,11 @@ def add_vertex_colors(gltf, colors, filename):
     view_idx = len(gltf.bufferViews)-1
     # Add an accessor
     gltf.accessors.append(pygltflib.Accessor(
-        bufferView=view_idx, byteOffset=0, componentType=pygltflib.UNSIGNED_BYTE, normalized=True, count=colors_rgbx.shape[0], type='VEC4'))
+        bufferView=view_idx, byteOffset=0, componentType=pygltflib.UNSIGNED_BYTE, normalized=True, count=colors_rgbx.shape[0], type='VEC3'))
     accessor_idx = len(gltf.accessors)-1
     # Point to accessor index in mesh primitive attributes
     gltf.meshes[0].primitives[0].attributes.COLOR_0 = accessor_idx
+
 
     return gltf
 
