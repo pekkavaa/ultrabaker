@@ -325,7 +325,7 @@ if verify_system_matrix:
 
 
 cache_path = None
-if args.input == "/home/user/dev/n64/hipoly_demo/work/lightmaps/bake_scene.gltf":
+if args.input == "/home/user/dev/n64/hipoly_demo/work/lightmaps/bake_scene_trimmed.gltf":
     cache_path = "b_cache.npy"
 
 import os
