@@ -152,9 +152,6 @@ if deduplicate:
     new_vertex_id_to_old = dict()
     old_vertex_id_to_new = dict()
 
-    # Maps new vertex index to the old array
-    vert_ids = []
-
     # for i in range(positions.shape[0]):
     #     p = positions[i]
     #     for j in range(i+1, positions.shape[0]):
@@ -176,9 +173,7 @@ if deduplicate:
             if key in pos_to_id:
                 i1 = pos_to_id[key]
             else:
-                # Read a compacted index and insert the new vertex
-                i1 = len(vert_ids)
-                vert_ids.append(i0)
+                i1 = i0
                 pos_to_id[key] = i1
             
             new_vertex_id_to_old[i1] = i0
@@ -195,7 +190,6 @@ if deduplicate:
     for tri in new_tris:
         for i0 in tri:
             assert i0 in new_vertex_id_to_old
-            assert i0 < len(vert_ids)
 
     for tri_idx, ((a, b, c), (a2, b2, c2)) in enumerate(zip(raw_tris, new_tris)):
         print(f"[{tri_idx}] ({a}, {b}, {c}) -> ({a2}, {b2}, {c2})")
@@ -207,15 +201,19 @@ if deduplicate:
 
 
     tris = new_tris
-    positions = np.take(raw_positions, vert_ids, axis=0)
-    normals = np.take(raw_normals, vert_ids, axis=0)
-    uvs = np.take(raw_uvs, vert_ids, axis=0)
+    positions = raw_positions
+    normals = raw_normals
+    uvs = raw_uvs
 
-    for new, old in enumerate(vert_ids):
-        assert(np.all(positions[new] == raw_positions[old]))
-        assert(np.all(normals[new] == raw_normals[old]))
-        assert(np.all(uvs[new] == raw_uvs[old]))
-    print()
+    # positions = np.take(raw_positions, vert_ids, axis=0)
+    # normals = np.take(raw_normals, vert_ids, axis=0)
+    # uvs = np.take(raw_uvs, vert_ids, axis=0)
+
+    # for new, old in enumerate(vert_ids):
+    #     assert(np.all(positions[new] == raw_positions[old]))
+    #     assert(np.all(normals[new] == raw_normals[old]))
+    #     assert(np.all(uvs[new] == raw_uvs[old]))
+    # print()
 else:
     tris = raw_tris
     positions = raw_positions
@@ -429,13 +427,16 @@ if deduplicate:
     #     assert(np.all(uvs[new] == raw_uvs[old]))
     # print()
 
-    x_expanded = np.zeros((len(raw_uvs), 3), dtype=x.dtype)
-    for new, old in enumerate(vert_ids):
-        x_expanded[old] = x[new]
+    # x_expanded = np.zeros((len(raw_uvs), 3), dtype=x.dtype)
+    # for new, old in enumerate(vert_ids):
+    #     x_expanded[old] = x[new]
+    x_copy = x.copy()
+    for old, new in old_vertex_id_to_new.items():
+        x[old] = x_copy[new]
 
 print(f"Saving GLB model {filename}")
 
-color_rgb = (x_expanded*255).astype(np.uint8)
+color_rgb = (x*255).astype(np.uint8)
 gltf = model_loader.add_vertex_colors(gltf, color_rgb, filename)
 gltf.save_binary(args.output)
 gltf.save("baked_plaintext.gltf")
@@ -447,7 +448,7 @@ if args.show:
     print("Rasterizing the result for preview")
 
     img_result = np.zeros_like(img)
-    draw_triangles(uvs, x, tris, backfacing, img_result)
+    draw_triangles(uvs, x, tris, backfacing_raw, img_result)
 
     plot_shape = (1,2)
     figsize=(12,6)
