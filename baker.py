@@ -159,6 +159,7 @@ if deduplicate:
     #         print(i,j,"match")
     #         # assert(not np.all(p == k))
 
+
     def get_location_key(p, n):
         x,y,z = p
         nx, ny, nz = n
@@ -200,7 +201,8 @@ if deduplicate:
     print()
 
 
-    tris = new_tris
+    # tris = new_tris
+    tris = raw_tris
     positions = raw_positions
     normals = raw_normals
     uvs = raw_uvs
@@ -239,7 +241,93 @@ edge_tris = {}
 vertex_tris = [[] for i in range(N)]
 vertex_neighbors = [set() for i in range(N)]
 
+# Maps a position-normal key to a set of oriented edges, vertex index pairs that is
+edge_twins: dict[tuple, set[tuple]] = {}
 
+def get_edge_key(i,j):
+    key_i = get_location_key(positions[i], normals[i])
+    key_j = get_location_key(positions[j], normals[j])
+    return (key_i, key_j)
+
+for tri_idx, (a, b, c) in enumerate(tris):
+    for i, j in [(a,b), (b,c), (c,a)]:
+        # key_i = get_location_key(raw_positions[i], raw_normals[i])
+        # key_j = get_location_key(raw_positions[j], raw_normals[j])
+        key_ij = get_edge_key(i,j) # (key_i, key_j)
+        if key_ij not in edge_twins:
+            edge_twins[key_ij] = set()
+        edge_twins[key_ij].add((i,j))
+
+        key_ji = get_edge_key(j,i) # (key_j, key_i)
+        if key_ji not in edge_twins:
+            edge_twins[key_ji] = set()
+        edge_twins[key_ji].add((j,i))
+
+# print("Edge twins:", edge_twins)
+
+for twins in edge_twins.values():
+    head, *rest = list(twins)
+    i,j = head
+    if rest:
+        for (k,l) in rest:
+            print(i,j,"vs",k,l)
+            assert np.all(positions[i] == positions[k])
+            assert np.all(positions[j] == positions[l])
+            assert np.all(normals[i] == normals[k])
+            assert np.all(normals[j] == normals[l])
+
+
+for tri_idx, (a, b, c) in enumerate(tris):
+    # If two triangles with the same winding share an edge, then the other
+    # side will have it as (i, j) and the other as (j, i). The 'edge_tris' array
+    # should contain *all* triangles incident to an edge used as a key, so we
+    # add the triangle to both ways below.
+    for i, j in [(a,b), (b,c), (c,a)]:
+        twins = edge_twins[get_edge_key(i,j)]
+        assert (i,j) in twins
+
+        for ti, tj in twins:
+            edge_tris.setdefault((ti,tj), []).append(tri_idx)
+            edge_tris.setdefault((tj,ti), []).append(tri_idx)
+
+            vertex_neighbors[i].add(tj)
+            vertex_neighbors[j].add(ti)
+        
+            vertex_tris[ti].append(tri_idx)
+
+    # vertex_tris[a].append(tri_idx)
+    # vertex_tris[b].append(tri_idx)
+    # vertex_tris[c].append(tri_idx)
+    # TODO also add structural neighbors
+
+    # PROBLEM: due to sparse triangle map vertex_tris will have empty elements
+
+# I belive the above loop doesn't guarantee uniqueness of per-edge and per-vertex
+# triangle lists so they are cleaned up here.
+
+# Deduplicate per-edge triangle lists
+for edge_key, tri_inds in edge_tris.items():
+    edge_tris[edge_key] = list(set(tri_inds))
+
+# Deduplicate per-vertex triangle list
+for vidx, tri_inds in enumerate(vertex_tris):
+    vertex_tris[vidx] = list(set(tri_inds))
+
+# Validation. Check that each triangle has at least itself in per-edge triangle lists
+for tri_idx, (a,b,c) in enumerate(tris):
+    for i, j in [(a,b), (b,c), (c,a)]:
+        neigh_tris = edge_tris[(i,j)]
+        assert tri_idx in neigh_tris
+    
+
+# print("edge tris")
+# print(edge_tris)
+# print("vertex neighbors")
+# print(vertex_neighbors)
+# print("vertex tris")
+# print(vertex_tris)
+# print()
+"""
 for tri_idx, (a, b, c) in enumerate(tris):
     # If two triangles with the same winding share an edge, then the other
     # side will have it as (i, j) and the other as (j, i). The 'edge_tris' array
@@ -250,14 +338,17 @@ for tri_idx, (a, b, c) in enumerate(tris):
         edge_tris.setdefault((j,i), []).append(tri_idx)
         vertex_neighbors[i].add(j)
         vertex_neighbors[j].add(i)
+        # TODO also add structural neighbors
 
     vertex_tris[a].append(tri_idx)
     vertex_tris[b].append(tri_idx)
     vertex_tris[c].append(tri_idx)
+    # TODO also add structural neighbors
 
     # PROBLEM: due to sparse triangle map vertex_tris will have empty elements
+"""
 
-validate_neighbors = True
+validate_neighbors = False # doesn't apply after dedup
 
 if validate_neighbors:
     for i, neighs in enumerate(vertex_neighbors):
@@ -272,10 +363,10 @@ if validate_neighbors:
             assert same_tri > -1, "Bug: Each neighbor in 'vertex_neighbors' must belong to some same triangle"
         
 
-print("Vertex tris:")
-print(vertex_tris)
-print("Edge tris:")
-print(edge_tris)
+# print("Vertex tris:")
+# print(vertex_tris)
+# print("Edge tris:")
+# print(edge_tris)
 
 
 tri_areas = []
@@ -342,6 +433,10 @@ if args.input == "/home/user/dev/n64/hipoly_demo/work/lightmaps/bake_scene.gltf"
 
 import os
 
+def get_location_key_ind(i):
+    return get_location_key(positions[i], normals[i])
+
+
 # check if file exists
 if cache_path and os.path.exists(cache_path):
     print("Loading ", cache_path)
@@ -365,11 +460,22 @@ else:
 
         for tri_idx in neighs:
             tri = tris[tri_idx]
-            assert i in tri
             v0, v1, v2 = np.take(uvs, tri, axis=0)
             total_neighbor_area += tri_areas[tri_idx]
 
-            local_idx = tri.index(i)
+            # HACK: We need a local index for the current vertex in a given triangle.
+            #       We use the position-normal key for it because we can't use a simple
+            #       search through triangle's indices. A triangle can be an UV-space disjoint
+            #       neighbor that has its own vertex indices even though they are neighbors
+            #       in world space.
+            local_idx = None
+            key_i = get_location_key_ind(i)
+            for local_j, j in enumerate(tri):
+                if get_location_key_ind(j) == key_i:
+                    local_idx = local_j
+                    break
+            assert local_idx is not None
+
             if backfacing[tri_idx]:
                 mask, weights = rasterize(hat_i.shape, v0, v1, v2)
             else:
@@ -387,7 +493,7 @@ else:
         if num_samples > 0:
             b[i] = (total_neighbor_area / num_samples) * np.sum(hat_i[...,None] * img, axis=(0,1))
 
-        if True:
+        if False:
             print('num_samples:', num_samples)
             print('total_neighbor_area:', total_neighbor_area)
             fig,ax=plt.subplots(3, figsize=(6,12))
