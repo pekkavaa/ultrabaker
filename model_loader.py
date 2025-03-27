@@ -95,7 +95,28 @@ def load_attribute(gltf, mesh, attribute_name):
     
     return np.array(vertices)
 
-def extract_pos_uvs_tris_img(gltf, filename):
+def load_image(path):
+    if Path(path).suffix == ".exr":
+        import pyexr
+        with pyexr.open(path) as file:
+            data = file.get()
+            
+            width, height = file.width, file.height
+            channels = file.channels
+            
+            print(f"EXR dimensions: {width}x{height}")
+            print(f"EXR channels: {channels}")
+
+            assert len(channels) == 3 or len(channels) == 4, "expected an RGB or RGBA image"
+            return data
+    else:
+        import skimage.io
+        img = skimage.io.imread(path)
+        img = img.astype(np.float32) / 255.0
+        return img
+
+
+def extract_pos_uvs_tris_img(gltf, filename, image_override: str):
     mesh = gltf.meshes[gltf.scenes[gltf.scene].nodes[0]]
 
     inds = load_indices(gltf, mesh)
@@ -103,13 +124,15 @@ def extract_pos_uvs_tris_img(gltf, filename):
     positions = load_attribute(gltf, mesh, 'POSITION')
     normals = load_attribute(gltf, mesh, 'NORMAL')
 
-    img_path = urllib.parse.unquote(gltf.images[0].uri)
-    img_rel_path = Path(filename).with_name(img_path)
-    print(img_rel_path)
+    if image_override:
+        img_path = image_override
+    else:
+        img_path = urllib.parse.unquote(gltf.images[0].uri)
 
-    import skimage.io
-    img = skimage.io.imread(img_rel_path)
-    img = img.astype(np.float32) / 255.0
+    img_rel_path = Path(filename).with_name(img_path)
+    print(f"Loading {img_rel_path}")
+
+    img = load_image(img_rel_path)
 
     if img.shape[2] == 4:
         print("Alpha channel ignored: Using only RGB channels of an RGBA image.")
@@ -159,6 +182,17 @@ def add_vertex_colors(gltf, colors, filename):
     colors_rgbx = np.zeros((colors.shape[0], 4), dtype=colors.dtype)
     colors_rgbx[:,0:3] = colors
     colors_bytes = colors_rgbx.tobytes()
+    
+    if colors_rgbx.dtype == np.uint8:
+        comp_type = pygltflib.UNSIGNED_BYTE
+        byte_stride = 4
+        normalized = True
+    elif colors_rgbx.dtype == np.float32:
+        comp_type = pygltflib.FLOAT
+        byte_stride = 12
+        normalized = False
+    else:
+        raise ValueError(f"Unsupported color type: {colors_rgbx.dtype}")
 
     # NOTE: pygltf doesn't support multiple buffers with a binary blob
 
@@ -183,11 +217,13 @@ def add_vertex_colors(gltf, colors, filename):
 
     buf_idx = 0
     # Add a bufferview with a stride=4 so that accesses are 4-byte aligned. Required by the GLTF spec.
-    gltf.bufferViews.append(pygltflib.BufferView(buffer=buf_idx, byteOffset=color_offset, byteLength = len(colors_bytes), byteStride=4))
+    gltf.bufferViews.append(
+        pygltflib.BufferView(buffer=buf_idx, byteOffset=color_offset, byteLength = len(colors_bytes),
+                             byteStride=byte_stride, target = pygltflib.ARRAY_BUFFER))
     view_idx = len(gltf.bufferViews)-1
     # Add an accessor
     gltf.accessors.append(pygltflib.Accessor(
-        bufferView=view_idx, byteOffset=0, componentType=pygltflib.UNSIGNED_BYTE, normalized=True, count=colors_rgbx.shape[0], type='VEC3'))
+        bufferView=view_idx, byteOffset=0, componentType=comp_type, normalized=normalized, count=colors_rgbx.shape[0], type='VEC3'))
     accessor_idx = len(gltf.accessors)-1
     # Point to accessor index in mesh primitive attributes
     gltf.meshes[0].primitives[0].attributes.COLOR_0 = accessor_idx

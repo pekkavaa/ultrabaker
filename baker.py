@@ -15,12 +15,12 @@ parser.add_argument("input", help="Path to input .GLTF model")
 parser.add_argument("output", default="baked.glb", nargs='?', help="Name of output model.")
 parser.add_argument("--smoothing", type=float, default=20, help="Color smoothing value in range [0,100]")
 parser.add_argument("--show", action='store_true', help="Show the baking result visualization at the end.")
+parser.add_argument("--save_linear", action='store_true', help="Save the vertex colors in linear space.")
+parser.add_argument("--save_float", action='store_true', help="Save vertex colors as floats.")
+parser.add_argument("--image", "-i", type=str, help="Path to input image.")
 args = parser.parse_args()
-print(args)
-
 
 np.random.seed(123)
-
 
 def cross2d(a,b):
     return a[..., 0]*b[..., 1] - a[..., 1]*b[..., 0]
@@ -135,9 +135,8 @@ from ycocg import RGB_to_YCoCg, YCoCg_to_RGB
 filename = args.input
 print(f"Loading {filename}")
 gltf = GLTF2().load(filename)
-raw_positions, raw_normals, raw_uvs, raw_tris, img = model_loader.extract_pos_uvs_tris_img(gltf, filename)
+raw_positions, raw_normals, raw_uvs, raw_tris, img = model_loader.extract_pos_uvs_tris_img(gltf, filename, image_override=args.image)
 
-# HACK: do processing in sRGB space
 # img[...,:3] = to_linear(img[...,:3])
 # img[...,:3] = RGB_to_YCoCg(img[...,:3])
 
@@ -488,8 +487,8 @@ x = np.clip(x, 0, 1)
 # Therefore we don't do gamma-to-linear conversion here.
 # x = from_linear(x)
 
-# HACK: sRGB processing
-x = to_linear(x)
+if args.save_linear:
+    x = to_linear(x)
 
 
 if deduplicate:
@@ -499,11 +498,18 @@ if deduplicate:
 
 print(f"Saving GLB model {filename}")
 
-color_rgb = (x*255).astype(np.uint8)
+if args.save_float:
+    print("Saving colors as floats")
+    color_rgb = x.astype(np.float32)
+else:
+    print("Saving colors as bytes")
+    color_rgb = (x*255).astype(np.uint8)
+
+
 gltf = model_loader.add_vertex_colors(gltf, color_rgb, filename)
 gltf.save_binary(args.output)
 gltf.save("baked_plaintext.gltf")
-model_loader.save_big_endian_dump(str(Path(args.output).with_suffix('.binm')), positions, raw_tris, color_rgb)
+# model_loader.save_big_endian_dump(str(Path(args.output).with_suffix('.binm')), positions, raw_tris, color_rgb)
 print("Saving done")
 
 if args.show:
