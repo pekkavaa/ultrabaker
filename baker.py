@@ -1,3 +1,4 @@
+import os
 from argparse import ArgumentParser
 from pathlib import Path
 import pygltflib
@@ -7,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import skimage.io
 import time
+import hashlib
 
 import model_loader
 
@@ -21,6 +23,17 @@ parser.add_argument("--image", "-i", type=str, help="Name of input image in the 
 args = parser.parse_args()
 
 np.random.seed(123)
+
+def sha256sum(filename, h=None):
+    if h is None:
+        h  = hashlib.sha256()
+    b  = bytearray(128*1024)
+    mv = memoryview(b)
+    with open(filename, 'rb', buffering=0) as f:
+        for n in iter(lambda : f.readinto(mv), 0):
+            h.update(mv[:n])
+    return h
+
 
 def cross2d(a,b):
     return a[..., 0]*b[..., 1] - a[..., 1]*b[..., 0]
@@ -365,17 +378,24 @@ if verify_system_matrix:
     assert (A_eigenvalues >= 0).all(), "'A' should have positive eigenvalues because it's a positive definite matrix"
 
 
-cache_path = None
-if args.input == "/home/user/dev/n64/hipoly_demo/work/lightmaps/bake_scene_trimmed.gltf":
-    cache_path = "b_cache.npy"
-
 import os
 
 def get_location_key_ind(i):
     return get_location_key(positions[i], normals[i])
 
+def get_cache_hash(inputpath, img):
+    hash = sha256sum(inputpath)
+    hash.update(img.tobytes())
+    hash = sha256sum(__file__,h=hash)
+    hash = sha256sum(str(Path(__file__).with_name("model_loader.py")), h=hash)
+    return hash.hexdigest()
 
-# check if file exists
+b_hash = get_cache_hash(args.input, img)
+cache_dir = Path(__file__).parent / 'cache'
+os.makedirs(cache_dir, exist_ok=True)
+cache_path = cache_dir / (b_hash + ".npy")
+
+# Use a cached 'b' matrix if possible.
 if cache_path and os.path.exists(cache_path):
     print("Loading ", cache_path)
     b = np.load(cache_path)
