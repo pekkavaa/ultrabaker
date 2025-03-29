@@ -17,7 +17,7 @@ parser.add_argument("--smoothing", type=float, default=20, help="Color smoothing
 parser.add_argument("--show", action='store_true', help="Show the baking result visualization at the end.")
 parser.add_argument("--save_linear", action='store_true', help="Save the vertex colors in linear space.")
 parser.add_argument("--save_float", action='store_true', help="Save vertex colors as floats.")
-parser.add_argument("--image", "-i", type=str, help="Path to input image.")
+parser.add_argument("--image", "-i", type=str, help="Name of input image in the same directory as the model.")
 args = parser.parse_args()
 
 np.random.seed(123)
@@ -508,7 +508,7 @@ else:
 
 gltf = model_loader.add_vertex_colors(gltf, color_rgb, filename)
 gltf.save_binary(args.output)
-gltf.save("baked_plaintext.gltf")
+# gltf.save("baked_plaintext.gltf")
 # model_loader.save_big_endian_dump(str(Path(args.output).with_suffix('.binm')), positions, raw_tris, color_rgb)
 print("Saving done")
 
