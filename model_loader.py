@@ -109,6 +109,15 @@ def load_image(path):
 
             assert len(channels) == 3 or len(channels) == 4, "expected an RGB or RGBA image"
             return data
+    elif Path(path).suffix == ".npy":
+        data = np.load(path)
+        assert data.dtype == np.float32
+        assert data.ndim == 3
+        height, width, channels = data.shape
+        print(f"npy dimensions: {width}x{height}")
+        print(f"npy channels: {channels}")
+        assert channels == 3 or channels == 4, "expected an RGB or RGBA image"
+        return data
     else:
         import skimage.io
         img = skimage.io.imread(path)
@@ -172,12 +181,16 @@ def add_vertex_colors(gltf, colors, filename):
     # lightmap_texcoord_index = 0
     # del gltf.images[lightmap_image_index]
     # del gltf.textures[lightmap_texture_index]
-    gltf.materials[lightmap_material_index].pbrMetallicRoughness.baseColorTexture = None
-    gltf.materials[lightmap_material_index].emissiveTexture = None
-    gltf.images.pop()
-    gltf.samplers.pop()
-    gltf.textures.pop()
-    mat = gltf.materials[lightmap_material_index]
+    if len(gltf.materials) > lightmap_material_index:
+        gltf.materials[lightmap_material_index].pbrMetallicRoughness.baseColorTexture = None
+        gltf.materials[lightmap_material_index].emissiveTexture = None
+
+    if len(gltf.images) > 0:
+        gltf.images.pop()
+    if len(gltf.samplers) > 0:
+        gltf.samplers.pop()
+    if len(gltf.textures) > 0:
+        gltf.textures.pop()
 
     colors_rgbx = np.zeros((colors.shape[0], 4), dtype=colors.dtype)
     colors_rgbx[:,0:3] = colors

@@ -150,6 +150,11 @@ print(f"Loading {filename}")
 gltf = GLTF2().load(filename)
 raw_positions, raw_normals, raw_uvs, raw_tris, img = model_loader.extract_pos_uvs_tris_img(gltf, filename, image_override=args.image)
 
+# fig, ax = plt.subplots(2, 1, figsize=(12,8))
+# ax.flatten()[0].imshow(img)
+# plt.show()
+
+
 # img[...,:3] = to_linear(img[...,:3])
 # img[...,:3] = RGB_to_YCoCg(img[...,:3])
 
