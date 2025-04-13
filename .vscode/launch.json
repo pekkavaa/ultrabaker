@@ -1,0 +1,82 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Python: test1",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/baker.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": ["examples/test1/n64rocky.gltf", "--show", "--smoothing", "50"]
+        },
+        {
+            "name": "Python: cubes",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/baker.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": ["examples/cubes/cubes.gltf", "--show", "--smoothing", "50", "--lightmap-uv=TEXCOORD_1"]
+        },
+        {
+            "name": "Python: bake scene",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/baker.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": ["/home/user/dev/n64/hipoly_demo/work/lightmaps/bake_scene_trimmed.gltf", "--show", "--smoothing", "50"]
+        },
+        {
+            "name": "Python: bake scene part",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/baker.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": ["/home/user/dev/n64/hipoly_demo/work/lightmaps/bake_scene_trimmed_part.gltf", "--show", "--smoothing", "1"]
+        },
+        {
+            "name": "bake scene part (EXR)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/baker.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": ["/home/user/dev/n64/hipoly_demo/work/lightmaps/bake_scene_trimmed_part.gltf",
+            "--image", "Lightmap Trimmed 2.exr",
+            "--save_float",
+             "--show", "--smoothing", "1"]
+        },
+        {
+            "name": "Python: bake quad",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/baker.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": ["/home/user/dev/n64/hipoly_demo/work/lightmaps/quad.gltf", "--show", "--smoothing", "10"]
+        },
+        {
+            "name": "Python: bake indirect",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/baker.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": ["/home/user/dev/n64/hipoly_demo/work/lightmaps/indirect_bake.glb", "--show", "--smoothing", "50", "--image", "indirect.npy"]
+        }
+    ]
+}
